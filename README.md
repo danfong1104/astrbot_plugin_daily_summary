@@ -143,9 +143,9 @@
 
 ## 开发者信息
 
-- 作者：danfong1104
+- 作者：WorkBuddy
 - 版本：1.0.0
-- 仓库：https://github.com/danfong1104/astrbot_plugin_daily_summary
+- 仓库：https://github.com/workbuddy/astrbot_plugin_daily_summary
 
 ## 许可证
 
