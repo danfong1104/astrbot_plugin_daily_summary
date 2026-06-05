@@ -24,6 +24,19 @@
     "default": "",
     "hint": "每行一个映射，格式：QQ号:昵称，如 17656960:Chaolf"
   },
+  "exclude_ids": {
+    "description": "排除ID",
+    "type": "text",
+    "default": "",
+    "hint": "每行一个QQ号，不统计这些人的消息，可填机器人QQ号"
+  },
+  "persona_id": {
+    "description": "总结人格",
+    "type": "string",
+    "_special": "select_persona",
+    "default": "",
+    "hint": "选择总结使用的AI人格，留空使用默认人格"
+  },
   "max_length": {
     "description": "日报最大字数限制",
     "type": "int",

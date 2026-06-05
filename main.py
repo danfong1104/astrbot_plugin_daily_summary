@@ -33,10 +33,15 @@ class DailySummaryPlugin(Star):
         self.group_ids = config.get("group_ids", [])
         self.max_length = config.get("max_length", 1000)
         self.debug_mode = config.get("debug_mode", False)
+        self.persona_id = config.get("persona_id", "")
         
         # 解析昵称映射（格式：QQ号:昵称，每行一个）
         nickname_mapping_str = config.get("nickname_mapping", "")
         self.nickname_mapping = self._parse_nickname_mapping(nickname_mapping_str)
+        
+        # 解析排除ID（格式：每行一个QQ号）
+        exclude_ids_str = config.get("exclude_ids", "")
+        self.exclude_ids = self._parse_exclude_ids(exclude_ids_str)
         
         # 处理中英文冒号通用性
         self._normalize_config()
@@ -73,6 +78,22 @@ class DailySummaryPlugin(Star):
             logger.info(f"Parsed {len(mapping)} nickname mappings")
         
         return mapping
+    
+    def _parse_exclude_ids(self, text: str) -> List[str]:
+        """解析排除ID，格式：每行一个QQ号"""
+        exclude_ids = []
+        if not text or not text.strip():
+            return exclude_ids
+        
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if line:
+                exclude_ids.append(line)
+        
+        if exclude_ids:
+            logger.info(f"Parsed {len(exclude_ids)} exclude IDs")
+        
+        return exclude_ids
     
     def _normalize_config(self):
         """规范化配置项，处理中英文冒号等"""
@@ -343,13 +364,11 @@ class DailySummaryPlugin(Star):
             "interesting_points": []
         }
         
-        bot_id = self._get_bot_id()
-        
         for msg in messages:
             sender_id = msg.get("sender_id") or msg.get("user_id")
             
-            # 跳过bot消息
-            if sender_id and str(sender_id) == str(bot_id):
+            # 跳过排除ID的消息
+            if sender_id and str(sender_id) in self.exclude_ids:
                 continue
             
             stats["total_messages"] += 1
@@ -406,6 +425,18 @@ class DailySummaryPlugin(Star):
             if not message_texts:
                 return {"topics": "", "interesting_points": "", "overall_summary": ""}
             
+            # 获取人格配置的 system_prompt
+            system_prompt = ""
+            if self.persona_id:
+                try:
+                    persona_mgr = self.context.persona_manager
+                    persona = persona_mgr.get_persona_by_id(self.persona_id)
+                    if persona:
+                        system_prompt = persona.prompt
+                        logger.info(f"Using persona: {self.persona_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to get persona {self.persona_id}: {e}")
+            
             # 构建提示词
             prompt = self._build_summary_prompt(message_texts)
             
@@ -416,9 +447,12 @@ class DailySummaryPlugin(Star):
                 provider_id = await self.context.get_current_chat_provider_id(umo=umo)
                 
                 if provider_id:
+                    # 如果有 system_prompt，拼接到 prompt 前面
+                    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    
                     llm_resp = await self.context.llm_generate(
                         chat_provider_id=provider_id,
-                        prompt=prompt,
+                        prompt=full_prompt,
                     )
                     
                     # 解析LLM响应
