@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -191,38 +190,104 @@ class DailySummaryPlugin(Star):
             return None
     
     async def _get_group_messages(self, group_id: str) -> List[Dict]:
-        """获取群聊历史消息"""
+        """获取群聊历史消息，使用 OneBot 11 的 get_group_msg_history API"""
         try:
-            # 使用AstrBot的对话管理器获取历史消息
-            conversation_mgr = self.context.conversation_manager
-            
-            # 构建统一消息来源
-            umo = f"aiocqhttp:group:{group_id}"
-            
-            # 获取对话列表
-            conversations = await conversation_mgr.get_conversations(
-                unified_msg_origin=umo
-            )
-            
-            if not conversations:
-                logger.warning(f"No conversations found for group {group_id}")
+            # 获取平台实例
+            platform = self.context.get_platform_by_type("aiocqhttp")
+            if not platform:
+                logger.error("aiocqhttp platform not found")
                 return []
             
-            # 获取第一个对话（通常是当前活跃的对话）
-            conversation = conversations[0]
-            
-            if not conversation.history:
-                logger.warning(f"No conversation history found for group {group_id}")
+            # 获取 bot 实例
+            bot = platform.get_bot()
+            if not bot:
+                logger.error("Bot instance not found")
                 return []
             
-            # 解析历史消息
-            history = json.loads(conversation.history) if isinstance(conversation.history, str) else conversation.history
+            # 计算时间范围
+            now = datetime.now()
+            if self.report_type == "daily":
+                # 今日消息：从今天 00:00 开始
+                cutoff_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                # 昨日消息：从昨天 00:00 到今天 00:00
+                cutoff_time = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
             
-            # 根据报告类型过滤消息
-            filtered_messages = self._filter_messages_by_date(history, group_id)
+            cutoff_timestamp = cutoff_time.timestamp()
+            
+            # 分页获取消息
+            all_messages = []
+            message_seq = 0
+            max_rounds = 10
+            max_messages = 2000
+            
+            for round_num in range(max_rounds):
+                try:
+                    # 调用 OneBot 11 API
+                    params = {
+                        "group_id": group_id,
+                        "count": 200,
+                        "message_seq": message_seq,
+                        "reverseOrder": True
+                    }
+                    
+                    resp = await bot.api.call_action("get_group_msg_history", **params)
+                    
+                    if not resp or "messages" not in resp:
+                        logger.warning(f"No messages in response for round {round_num}")
+                        break
+                    
+                    messages = resp["messages"]
+                    if not messages:
+                        break
+                    
+                    # 处理消息
+                    for msg in messages:
+                        msg_time = msg.get("time", 0)
+                        sender_id = str(msg.get("sender", {}).get("user_id", ""))
+                        
+                        # 提取消息内容
+                        content = self._extract_message_content(msg)
+                        
+                        if content:
+                            all_messages.append({
+                                "sender_id": sender_id,
+                                "content": content,
+                                "timestamp": msg_time,
+                                "message_seq": msg.get("message_id", 0)
+                            })
+                    
+                    # 更新分页游标
+                    if messages:
+                        # 获取最旧消息的 seq
+                        oldest_msg = min(messages, key=lambda m: m.get("time", float("inf")))
+                        new_seq = oldest_msg.get("message_seq", 0)
+                        
+                        # 检查是否已经获取到足够早的消息
+                        oldest_time = oldest_msg.get("time", 0)
+                        if oldest_time < cutoff_timestamp:
+                            break
+                        
+                        if new_seq == message_seq:
+                            break
+                        message_seq = new_seq
+                    
+                    # 检查消息数量限制
+                    if len(all_messages) >= max_messages:
+                        break
+                        
+                except Exception as e:
+                    logger.error(f"Error in fetch round {round_num}: {e}")
+                    break
             
             if self.debug_mode:
-                logger.debug(f"Retrieved {len(filtered_messages)} messages for group {group_id}")
+                logger.debug(f"Retrieved {len(all_messages)} raw messages for group {group_id}")
+            
+            # 根据时间过滤消息
+            filtered_messages = self._filter_messages_by_time(all_messages, cutoff_timestamp)
+            
+            if self.debug_mode:
+                logger.debug(f"After filtering: {len(filtered_messages)} messages for group {group_id}")
             
             return filtered_messages
             
@@ -230,36 +295,41 @@ class DailySummaryPlugin(Star):
             logger.error(f"Error getting messages for group {group_id}: {e}")
             return []
     
-    def _filter_messages_by_date(self, messages: List[Dict], group_id: str) -> List[Dict]:
-        """根据报告类型过滤消息"""
+    def _extract_message_content(self, msg: Dict) -> str:
+        """提取消息内容"""
+        # 尝试从 raw_message 获取
+        raw_message = msg.get("raw_message", "")
+        if raw_message:
+            return raw_message
+        
+        # 尝试从 message 获取
+        message_list = msg.get("message", [])
+        if isinstance(message_list, list):
+            text_parts = []
+            for seg in message_list:
+                if isinstance(seg, dict):
+                    if seg.get("type") == "text":
+                        text_parts.append(seg.get("data", {}).get("text", ""))
+            return "".join(text_parts)
+        
+        return ""
+    
+    def _filter_messages_by_time(self, messages: List[Dict], cutoff_timestamp: float) -> List[Dict]:
+        """根据时间过滤消息"""
         now = datetime.now()
         
         if self.report_type == "daily":
-            # 今日消息
-            target_date = now.date()
+            # 今日消息：从今天 00:00 到现在
+            end_timestamp = now.timestamp()
         else:
-            # 昨日消息
-            target_date = (now - timedelta(days=1)).date()
+            # 昨日消息：从昨天 00:00 到今天 00:00
+            end_timestamp = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         
         filtered = []
         for msg in messages:
-            # 假设消息中有时间戳字段
-            # 实际实现需要根据AstrBot的消息格式调整
-            timestamp = msg.get("timestamp") or msg.get("time")
-            if timestamp:
-                try:
-                    if isinstance(timestamp, (int, float)):
-                        msg_date = datetime.fromtimestamp(timestamp).date()
-                    else:
-                        # 尝试解析字符串时间戳
-                        msg_date = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).date()
-                    
-                    if msg_date == target_date:
-                        filtered.append(msg)
-                except Exception as e:
-                    if self.debug_mode:
-                        logger.debug(f"Failed to parse timestamp {timestamp}: {e}")
-                    continue
+            msg_time = msg.get("timestamp", 0)
+            if cutoff_timestamp <= msg_time <= end_timestamp:
+                filtered.append(msg)
         
         return filtered
     
