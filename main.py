@@ -198,10 +198,10 @@ class DailySummaryPlugin(Star):
                 logger.error("aiocqhttp platform not found")
                 return []
             
-            # 获取 bot 实例
-            bot = platform.get_bot()
+            # 获取客户端实例（bot）
+            bot = platform.get_client()
             if not bot:
-                logger.error("Bot instance not found")
+                logger.error("Bot client not found")
                 return []
             
             # 计算时间范围
