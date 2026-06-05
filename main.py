@@ -193,7 +193,7 @@ class DailySummaryPlugin(Star):
         """获取群聊历史消息，使用 OneBot 11 的 get_group_msg_history API"""
         try:
             # 获取平台实例
-            platform = self.context.get_platform_by_type("aiocqhttp")
+            platform = self.context.get_platform(filter.PlatformAdapterType.AIOCQHTTP)
             if not platform:
                 logger.error("aiocqhttp platform not found")
                 return []
