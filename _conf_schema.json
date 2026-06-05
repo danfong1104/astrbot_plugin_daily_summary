@@ -20,12 +20,9 @@
   },
   "nickname_mapping": {
     "description": "昵称名单",
-    "type": "object",
-    "items": {
-      "type": "string"
-    },
-    "default": {},
-    "hint": "QQ号到昵称的映射，如 {\"1234567\": \"小明\"}"
+    "type": "text",
+    "default": "{}",
+    "hint": "QQ号到昵称的JSON映射，如 {\"1234567\": \"小明\", \"7654321\": \"小红\"}"
   },
   "max_length": {
     "description": "日报最大字数限制",

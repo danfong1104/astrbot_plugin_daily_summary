@@ -32,9 +32,16 @@ class DailySummaryPlugin(Star):
         self.report_type = config.get("report_type", "daily")
         self.push_time = config.get("push_time", "23:00")
         self.group_ids = config.get("group_ids", [])
-        self.nickname_mapping = config.get("nickname_mapping", {})
         self.max_length = config.get("max_length", 1000)
         self.debug_mode = config.get("debug_mode", False)
+        
+        # 解析昵称映射（文本类型，需要解析JSON）
+        nickname_mapping_str = config.get("nickname_mapping", "{}")
+        try:
+            self.nickname_mapping = json.loads(nickname_mapping_str) if isinstance(nickname_mapping_str, str) else nickname_mapping_str
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid nickname_mapping JSON: {nickname_mapping_str}, using empty dict")
+            self.nickname_mapping = {}
         
         # 处理中英文冒号通用性
         self._normalize_config()
