@@ -1,0 +1,39 @@
+{
+  "report_type": {
+    "description": "报告类型",
+    "type": "string",
+    "options": ["daily", "yesterday"],
+    "default": "daily",
+    "hint": "选择总结今日消息还是昨日消息"
+  },
+  "push_time": {
+    "description": "推送时间",
+    "type": "string",
+    "default": "23:00",
+    "hint": "每日自动推送的时间，格式为 HH:MM（如 23:00）"
+  },
+  "group_ids": {
+    "description": "推送群聊",
+    "type": "list",
+    "default": [],
+    "hint": "需要推送总结的群号列表，如 [123456789, 987654321]"
+  },
+  "nickname_mapping": {
+    "description": "昵称名单",
+    "type": "dict",
+    "default": {},
+    "hint": "QQ号到昵称的映射，如 {\"1234567\": \"小明\"}"
+  },
+  "max_length": {
+    "description": "日报最大字数限制",
+    "type": "int",
+    "default": 1000,
+    "hint": "总结报告的最大字数限制，默认1000字"
+  },
+  "debug_mode": {
+    "description": "调试模式",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后会输出详细的调试日志"
+  }
+}

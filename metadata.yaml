@@ -1,0 +1,14 @@
+name: astrbot_plugin_daily_summary
+display_name: 每日群聊总结
+author: danfong1104
+version: 1.0.0
+desc: 每日自动总结群聊消息，统计活跃度、提取话题、AI生成精彩回顾
+repo: https://github.com/danfong1104/astrbot_plugin_daily_summary
+astrbot_version: ">=4.16,<5"
+support_platforms:
+  - aiocqhttp
+  - qq_official
+  - telegram
+  - wecom
+  - lark
+  - dingtalk
