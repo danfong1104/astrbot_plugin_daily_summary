@@ -21,6 +21,9 @@
   "nickname_mapping": {
     "description": "昵称名单",
     "type": "object",
+    "items": {
+      "type": "string"
+    },
     "default": {},
     "hint": "QQ号到昵称的映射，如 {\"1234567\": \"小明\"}"
   },
