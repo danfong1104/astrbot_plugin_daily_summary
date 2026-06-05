@@ -21,8 +21,8 @@
   "nickname_mapping": {
     "description": "昵称名单",
     "type": "text",
-    "default": "{}",
-    "hint": "QQ号到昵称的JSON映射，如 {\"1234567\": \"小明\", \"7654321\": \"小红\"}"
+    "default": "",
+    "hint": "每行一个映射，格式：QQ号:昵称，如 17656960:Chaolf"
   },
   "max_length": {
     "description": "日报最大字数限制",

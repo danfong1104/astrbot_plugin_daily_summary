@@ -35,13 +35,9 @@ class DailySummaryPlugin(Star):
         self.max_length = config.get("max_length", 1000)
         self.debug_mode = config.get("debug_mode", False)
         
-        # 解析昵称映射（文本类型，需要解析JSON）
-        nickname_mapping_str = config.get("nickname_mapping", "{}")
-        try:
-            self.nickname_mapping = json.loads(nickname_mapping_str) if isinstance(nickname_mapping_str, str) else nickname_mapping_str
-        except json.JSONDecodeError:
-            logger.warning(f"Invalid nickname_mapping JSON: {nickname_mapping_str}, using empty dict")
-            self.nickname_mapping = {}
+        # 解析昵称映射（格式：QQ号:昵称，每行一个）
+        nickname_mapping_str = config.get("nickname_mapping", "")
+        self.nickname_mapping = self._parse_nickname_mapping(nickname_mapping_str)
         
         # 处理中英文冒号通用性
         self._normalize_config()
@@ -51,6 +47,33 @@ class DailySummaryPlugin(Star):
         self._setup_scheduler()
         
         logger.info(f"DailySummaryPlugin initialized with report_type={self.report_type}, push_time={self.push_time}")
+    
+    def _parse_nickname_mapping(self, text: str) -> Dict[str, str]:
+        """解析昵称映射，格式：QQ号:昵称，每行一个"""
+        mapping = {}
+        if not text or not text.strip():
+            return mapping
+        
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 支持中英文冒号
+            line = line.replace("：", ":")
+            
+            # 分割QQ号和昵称
+            parts = line.split(":", 1)
+            if len(parts) == 2:
+                qq_id = parts[0].strip()
+                nickname = parts[1].strip()
+                if qq_id and nickname:
+                    mapping[qq_id] = nickname
+        
+        if mapping:
+            logger.info(f"Parsed {len(mapping)} nickname mappings")
+        
+        return mapping
     
     def _normalize_config(self):
         """规范化配置项，处理中英文冒号等"""
@@ -62,15 +85,6 @@ class DailySummaryPlugin(Star):
             if not re.match(r"^\d{1,2}:\d{2}$", self.push_time):
                 logger.warning(f"Invalid push_time format: {self.push_time}, using default 23:00")
                 self.push_time = "23:00"
-        
-        # 处理昵称映射中的键（可能包含中英文冒号）
-        if self.nickname_mapping:
-            normalized_mapping = {}
-            for key, value in self.nickname_mapping.items():
-                # 规范化键（移除可能的空格和特殊字符）
-                normalized_key = str(key).strip()
-                normalized_mapping[normalized_key] = value
-            self.nickname_mapping = normalized_mapping
     
     def _setup_scheduler(self):
         """设置定时调度器"""
@@ -185,13 +199,19 @@ class DailySummaryPlugin(Star):
             # 构建统一消息来源
             umo = f"aiocqhttp:group:{group_id}"
             
-            # 获取对话
-            conversation = await conversation_mgr.get_conversation(
-                unified_msg_origin=umo,
-                create_if_not_exists=True
+            # 获取对话列表
+            conversations = await conversation_mgr.get_conversations(
+                unified_msg_origin=umo
             )
             
-            if not conversation or not conversation.history:
+            if not conversations:
+                logger.warning(f"No conversations found for group {group_id}")
+                return []
+            
+            # 获取第一个对话（通常是当前活跃的对话）
+            conversation = conversations[0]
+            
+            if not conversation.history:
                 logger.warning(f"No conversation history found for group {group_id}")
                 return []
             
