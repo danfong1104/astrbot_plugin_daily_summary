@@ -429,8 +429,7 @@ class DailySummaryPlugin(Star):
             system_prompt = ""
             if self.persona_id:
                 try:
-                    persona_mgr = self.context.persona_manager
-                    persona = persona_mgr.get_persona_by_id(self.persona_id)
+                    persona = await self.context.persona_manager.get_persona(self.persona_id)
                     if persona:
                         system_prompt = persona.prompt
                         logger.info(f"Using persona: {self.persona_id}")
