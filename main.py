@@ -413,12 +413,17 @@ class DailySummaryPlugin(Star):
     async def _generate_ai_summary(self, messages: List[Dict]) -> Dict[str, str]:
         """生成AI总结"""
         try:
-            # 准备消息内容用于AI总结
+            # 准备消息内容用于AI总结（排除指定ID）
             message_texts = []
             for msg in messages:
+                sender_id = msg.get("sender_id") or msg.get("user_id")
+                
+                # 跳过排除ID的消息
+                if sender_id and str(sender_id) in self.exclude_ids:
+                    continue
+                
                 content = msg.get("content") or msg.get("message")
                 if content:
-                    sender_id = msg.get("sender_id") or msg.get("user_id")
                     nickname = self._get_nickname(sender_id) if sender_id else "Unknown"
                     message_texts.append(f"{nickname}: {content}")
             
@@ -431,7 +436,12 @@ class DailySummaryPlugin(Star):
                 try:
                     persona = await self.context.persona_manager.get_persona(self.persona_id)
                     if persona:
-                        system_prompt = persona.prompt
+                        # 兼容不同版本的属性名
+                        for attr in ("prompt", "system_prompt", "persona_prompt"):
+                            value = getattr(persona, attr, None)
+                            if isinstance(value, str) and value.strip():
+                                system_prompt = value
+                                break
                         logger.info(f"Using persona: {self.persona_id}")
                 except Exception as e:
                     logger.warning(f"Failed to get persona {self.persona_id}: {e}")
@@ -479,12 +489,19 @@ class DailySummaryPlugin(Star):
 
 {messages_text}
 
-请按以下格式输出（不要添加任何其他内容）：
-1. 今日主要话题：列出讨论的主要话题（2-3个）
-2. 有趣亮点：提取1-2个比较有意思或精彩的点
+请按以下格式输出（严格遵守格式，不要添加任何其他内容）：
+1. 今日主要话题：
+- 话题1：简要描述
+- 话题2：简要描述
+- 话题3：简要描述
+
+2. 有趣亮点：
+- 亮点1：简要描述
+- 亮点2：简要描述
+
 3. 50字总结：从话题深度、群友参与度、讨论激烈度、活跃度、氛围等方面进行整体总结（50字以内）
 
-请用简洁明了的语言，突出重点。"""
+注意：话题和亮点必须用"-"开头，每个单独成行。"""
         
         return prompt
     
@@ -589,20 +606,36 @@ class DailySummaryPlugin(Star):
                 report_lines.append(f"{medal} {user['nickname']}：{user['count']}条消息")
             report_lines.append("")
         
-        # 添加AI总结
+        # 添加AI总结（美化排版）
         if ai_summary.get("topics"):
-            report_lines.extend([
-                "💡 今日话题",
-                ai_summary["topics"],
-                ""
-            ])
+            report_lines.append("💡 今日话题")
+            topics_text = ai_summary["topics"]
+            # 如果话题包含换行符，直接使用；否则按顿号分割
+            if "\n" in topics_text:
+                report_lines.append(topics_text)
+            else:
+                # 按顿号或逗号分割，每个话题单独成行
+                topics = [t.strip() for t in topics_text.replace("，", "、").split("、") if t.strip()]
+                for topic in topics:
+                    if not topic.startswith("-"):
+                        topic = f"🟢 {topic}"
+                    report_lines.append(topic)
+            report_lines.append("")
         
         if ai_summary.get("interesting_points"):
-            report_lines.extend([
-                "✨ 精彩瞬间",
-                ai_summary["interesting_points"],
-                ""
-            ])
+            report_lines.append("✨ 精彩瞬间")
+            points_text = ai_summary["interesting_points"]
+            # 如果亮点包含换行符，直接使用；否则按顿号分割
+            if "\n" in points_text:
+                report_lines.append(points_text)
+            else:
+                # 按顿号或逗号分割，每个亮点单独成行
+                points = [p.strip() for p in points_text.replace("，", "、").split("、") if p.strip()]
+                for point in points:
+                    if not point.startswith("-"):
+                        point = f"⭐ {point}"
+                    report_lines.append(point)
+            report_lines.append("")
         
         if ai_summary.get("overall_summary"):
             report_lines.extend([
