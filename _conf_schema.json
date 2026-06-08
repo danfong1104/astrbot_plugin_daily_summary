@@ -30,12 +30,11 @@
     "default": "",
     "hint": "每行一个QQ号，不统计这些人的消息，可填机器人QQ号"
   },
-  "persona_id": {
-    "description": "总结人格",
-    "type": "string",
-    "_special": "select_persona",
-    "default": "",
-    "hint": "选择总结使用的AI人格，留空使用默认人格"
+  "summary_prompt": {
+    "description": "总结口吻",
+    "type": "text",
+    "default": "你是一个群聊总结助手，请用轻松幽默的口吻总结群聊内容。",
+    "hint": "设定总结的语气风格，如：轻松幽默、正式严肃、可爱俏皮等"
   },
   "max_length": {
     "description": "日报最大字数限制",

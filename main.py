@@ -33,7 +33,7 @@ class DailySummaryPlugin(Star):
         self.group_ids = config.get("group_ids", [])
         self.max_length = config.get("max_length", 1000)
         self.debug_mode = config.get("debug_mode", False)
-        self.persona_id = config.get("persona_id", "")
+        self.summary_prompt = config.get("summary_prompt", "你是一个群聊总结助手，请用轻松幽默的口吻总结群聊内容。")
         
         # 解析昵称映射（格式：QQ号:昵称，每行一个）
         nickname_mapping_str = config.get("nickname_mapping", "")
@@ -430,22 +430,6 @@ class DailySummaryPlugin(Star):
             if not message_texts:
                 return {"topics": "", "interesting_points": "", "overall_summary": ""}
             
-            # 获取人格配置的 system_prompt
-            system_prompt = ""
-            if self.persona_id:
-                try:
-                    persona = await self.context.persona_manager.get_persona(self.persona_id)
-                    if persona:
-                        # 兼容不同版本的属性名
-                        for attr in ("prompt", "system_prompt", "persona_prompt"):
-                            value = getattr(persona, attr, None)
-                            if isinstance(value, str) and value.strip():
-                                system_prompt = value
-                                break
-                        logger.info(f"Using persona: {self.persona_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to get persona {self.persona_id}: {e}")
-            
             # 构建提示词
             prompt = self._build_summary_prompt(message_texts)
             
@@ -456,12 +440,9 @@ class DailySummaryPlugin(Star):
                 provider_id = await self.context.get_current_chat_provider_id(umo=umo)
                 
                 if provider_id:
-                    # 如果有 system_prompt，拼接到 prompt 前面
-                    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-                    
                     llm_resp = await self.context.llm_generate(
                         chat_provider_id=provider_id,
-                        prompt=full_prompt,
+                        prompt=prompt,
                     )
                     
                     # 解析LLM响应
@@ -485,23 +466,27 @@ class DailySummaryPlugin(Star):
         recent_messages = messages[-100:] if len(messages) > 100 else messages
         messages_text = "\n".join(recent_messages)
         
-        prompt = f"""请对以下群聊记录进行总结分析：
+        # 使用配置的总结口吻
+        style_prompt = self.summary_prompt if self.summary_prompt else "你是一个群聊总结助手，请用轻松幽默的口吻总结群聊内容。"
+        
+        prompt = f"""{style_prompt}
 
+以下是群聊记录：
 {messages_text}
 
-请按以下格式输出（严格遵守格式，不要添加任何其他内容）：
-1. 今日主要话题：
-- 话题1：简要描述
-- 话题2：简要描述
-- 话题3：简要描述
+请严格按照以下格式输出，不要添加任何多余内容：
 
-2. 有趣亮点：
-- 亮点1：简要描述
-- 亮点2：简要描述
+【今日话题】
+话题1：一句话描述
+话题2：一句话描述
+话题3：一句话描述
 
-3. 50字总结：从话题深度、群友参与度、讨论激烈度、活跃度、氛围等方面进行整体总结（50字以内）
+【精彩瞬间】
+亮点1：一句话描述
+亮点2：一句话描述
 
-注意：话题和亮点必须用"-"开头，每个单独成行。"""
+【整体总结】
+50字以内的总结"""
         
         return prompt
     
@@ -510,41 +495,28 @@ class DailySummaryPlugin(Star):
         result = {"topics": "", "interesting_points": "", "overall_summary": ""}
         
         try:
-            # 尝试解析结构化响应
-            lines = response_text.strip().split("\n")
-            current_section = None
+            # 按【】分割章节
+            import re
+            sections = re.split(r'【([^】]+)】', response_text)
             
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # 检测章节标题
-                if "今日主要话题" in line or "主要话题" in line:
-                    current_section = "topics"
-                    # 提取冒号后的内容
-                    if "：" in line:
-                        result["topics"] = line.split("：", 1)[1].strip()
-                    elif ":" in line:
-                        result["topics"] = line.split(":", 1)[1].strip()
-                elif "有趣亮点" in line or "精彩瞬间" in line:
-                    current_section = "interesting_points"
-                    if "：" in line:
-                        result["interesting_points"] = line.split("：", 1)[1].strip()
-                    elif ":" in line:
-                        result["interesting_points"] = line.split(":", 1)[1].strip()
-                elif "50字总结" in line or "整体总结" in line:
-                    current_section = "overall_summary"
-                    if "：" in line:
-                        result["overall_summary"] = line.split("：", 1)[1].strip()
-                    elif ":" in line:
-                        result["overall_summary"] = line.split(":", 1)[1].strip()
-                elif current_section:
-                    # 追加到当前章节
-                    if result[current_section]:
-                        result[current_section] += " " + line
-                    else:
-                        result[current_section] = line
+            # sections[0] 是第一个标记前的内容（通常为空）
+            # sections[1] 是第一个标记名
+            # sections[2] 是第一个标记的内容
+            # sections[3] 是第二个标记名
+            # sections[4] 是第二个标记的内容
+            # ...
+            
+            for i in range(1, len(sections), 2):
+                if i + 1 < len(sections):
+                    section_name = sections[i].strip()
+                    section_content = sections[i + 1].strip()
+                    
+                    if "话题" in section_name:
+                        result["topics"] = section_content
+                    elif "亮点" in section_name or "瞬间" in section_name:
+                        result["interesting_points"] = section_content
+                    elif "总结" in section_name:
+                        result["overall_summary"] = section_content
             
             # 如果没有解析到内容，使用整个响应作为整体总结
             if not any(result.values()):
@@ -606,43 +578,33 @@ class DailySummaryPlugin(Star):
                 report_lines.append(f"{medal} {user['nickname']}：{user['count']}条消息")
             report_lines.append("")
         
-        # 添加AI总结（美化排版）
+        # 添加AI总结（直接使用AI返回的格式化内容）
         if ai_summary.get("topics"):
             report_lines.append("💡 今日话题")
-            topics_text = ai_summary["topics"]
-            # 如果话题包含换行符，直接使用；否则按顿号分割
-            if "\n" in topics_text:
-                report_lines.append(topics_text)
-            else:
-                # 按顿号或逗号分割，每个话题单独成行
-                topics = [t.strip() for t in topics_text.replace("，", "、").split("、") if t.strip()]
-                for topic in topics:
-                    if not topic.startswith("-"):
-                        topic = f"🟢 {topic}"
-                    report_lines.append(topic)
+            # 给每行添加🟢前缀
+            for line in ai_summary["topics"].split("\n"):
+                line = line.strip()
+                if line:
+                    if not line.startswith("🟢") and not line.startswith("话题"):
+                        line = f"🟢 {line}"
+                    report_lines.append(line)
             report_lines.append("")
         
         if ai_summary.get("interesting_points"):
             report_lines.append("✨ 精彩瞬间")
-            points_text = ai_summary["interesting_points"]
-            # 如果亮点包含换行符，直接使用；否则按顿号分割
-            if "\n" in points_text:
-                report_lines.append(points_text)
-            else:
-                # 按顿号或逗号分割，每个亮点单独成行
-                points = [p.strip() for p in points_text.replace("，", "、").split("、") if p.strip()]
-                for point in points:
-                    if not point.startswith("-"):
-                        point = f"⭐ {point}"
-                    report_lines.append(point)
+            # 给每行添加⭐前缀
+            for line in ai_summary["interesting_points"].split("\n"):
+                line = line.strip()
+                if line:
+                    if not line.startswith("⭐") and not line.startswith("亮点"):
+                        line = f"⭐ {line}"
+                    report_lines.append(line)
             report_lines.append("")
         
         if ai_summary.get("overall_summary"):
-            report_lines.extend([
-                "📝 整体总结",
-                ai_summary["overall_summary"],
-                ""
-            ])
+            report_lines.append("📝 整体总结")
+            report_lines.append(ai_summary["overall_summary"])
+            report_lines.append("")
         
         # 添加时间戳
         report_lines.extend([
