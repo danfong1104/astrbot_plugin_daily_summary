@@ -265,7 +265,9 @@ class DailySummaryPlugin(Star):
                     # 处理消息
                     for msg in messages:
                         msg_time = msg.get("time", 0)
-                        sender_id = str(msg.get("sender", {}).get("user_id", ""))
+                        sender = msg.get("sender", {})
+                        sender_id = str(sender.get("user_id", ""))
+                        sender_nickname = sender.get("nickname", "")
                         
                         # 提取消息内容
                         content = self._extract_message_content(msg)
@@ -273,6 +275,7 @@ class DailySummaryPlugin(Star):
                         if content:
                             all_messages.append({
                                 "sender_id": sender_id,
+                                "sender_nickname": sender_nickname,
                                 "content": content,
                                 "timestamp": msg_time,
                                 "message_seq": msg.get("message_id", 0)
@@ -399,15 +402,17 @@ class DailySummaryPlugin(Star):
         # 暂时返回空字符串，实际实现需要调整
         return ""
     
-    def _get_nickname(self, user_id: str) -> str:
+    def _get_nickname(self, user_id: str, msg_nickname: str = "") -> str:
         """获取用户昵称"""
         # 先从昵称映射中查找
         if user_id in self.nickname_mapping:
             return self.nickname_mapping[user_id]
         
-        # 尝试从平台获取昵称
-        # 这里需要根据平台适配器获取昵称
-        # 暂时返回用户ID
+        # 使用消息中的昵称
+        if msg_nickname:
+            return msg_nickname
+        
+        # 返回用户ID作为最后手段
         return str(user_id)
     
     async def _generate_ai_summary(self, messages: List[Dict]) -> Dict[str, str]:
@@ -424,7 +429,8 @@ class DailySummaryPlugin(Star):
                 
                 content = msg.get("content") or msg.get("message")
                 if content:
-                    nickname = self._get_nickname(sender_id) if sender_id else "Unknown"
+                    msg_nickname = msg.get("sender_nickname", "")
+                    nickname = self._get_nickname(sender_id, msg_nickname) if sender_id else "Unknown"
                     message_texts.append(f"{nickname}: {content}")
             
             if not message_texts:
@@ -477,16 +483,22 @@ class DailySummaryPlugin(Star):
 请严格按照以下格式输出，不要添加任何多余内容：
 
 【今日话题】
-话题1：一句话描述
-话题2：一句话描述
-话题3：一句话描述
+一句话描述第一个话题
+一句话描述第二个话题
+一句话描述第三个话题
 
-【精彩瞬间】
-亮点1：一句话描述
-亮点2：一句话描述
+【今日金句】
+xxxx说："xxxxxxx"
+xxxx说："xxxxxxx"
+xxxx说："xxxxxxx"
 
 【整体总结】
-50字以内的总结"""
+50字以内的总结
+
+注意：
+1. 今日话题：直接写话题描述，不要加序号，每行一个话题
+2. 今日金句：提取群聊中最有意思、最精辟、反响最好的话，格式为 昵称说："原话"，最多3条
+3. 整体总结：50字以内"""
         
         return prompt
     
@@ -584,20 +596,18 @@ class DailySummaryPlugin(Star):
             # 给每行添加🟢前缀
             for line in ai_summary["topics"].split("\n"):
                 line = line.strip()
-                if line:
-                    if not line.startswith("🟢") and not line.startswith("话题"):
+                if line and not line.startswith("【"):
+                    if not line.startswith("🟢"):
                         line = f"🟢 {line}"
                     report_lines.append(line)
             report_lines.append("")
         
         if ai_summary.get("interesting_points"):
-            report_lines.append("✨ 精彩瞬间")
-            # 给每行添加⭐前缀
+            report_lines.append("💬 今日金句")
+            # 金句格式已经由AI生成，直接输出
             for line in ai_summary["interesting_points"].split("\n"):
                 line = line.strip()
-                if line:
-                    if not line.startswith("⭐") and not line.startswith("亮点"):
-                        line = f"⭐ {line}"
+                if line and not line.startswith("【"):
                     report_lines.append(line)
             report_lines.append("")
         
