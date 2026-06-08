@@ -367,6 +367,9 @@ class DailySummaryPlugin(Star):
             "interesting_points": []
         }
         
+        # 存储用户昵称
+        user_nicknames = {}
+        
         for msg in messages:
             sender_id = msg.get("sender_id") or msg.get("user_id")
             
@@ -376,10 +379,13 @@ class DailySummaryPlugin(Star):
             
             stats["total_messages"] += 1
             
-            # 统计用户消息
+            # 统计用户消息并记录昵称
             if sender_id:
                 if sender_id not in stats["user_messages"]:
                     stats["user_messages"][sender_id] = 0
+                    # 记录用户昵称（优先使用消息中的昵称）
+                    msg_nickname = msg.get("sender_nickname", "")
+                    user_nicknames[sender_id] = self._get_nickname(sender_id, msg_nickname)
                 stats["user_messages"][sender_id] += 1
         
         # 获取前三名
@@ -390,7 +396,7 @@ class DailySummaryPlugin(Star):
         )[:3]
         
         stats["top_users"] = [
-            {"user_id": uid, "count": count, "nickname": self._get_nickname(uid)}
+            {"user_id": uid, "count": count, "nickname": user_nicknames.get(uid, str(uid))}
             for uid, count in sorted_users
         ]
         
@@ -525,7 +531,7 @@ xxxx说："xxxxxxx"
                     
                     if "话题" in section_name:
                         result["topics"] = section_content
-                    elif "亮点" in section_name or "瞬间" in section_name:
+                    elif "金句" in section_name or "亮点" in section_name or "瞬间" in section_name:
                         result["interesting_points"] = section_content
                     elif "总结" in section_name:
                         result["overall_summary"] = section_content
