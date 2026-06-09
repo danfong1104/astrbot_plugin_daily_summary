@@ -95,6 +95,11 @@ class DailySummaryPlugin(Star):
         
         return exclude_ids
     
+    @property
+    def _day_label(self) -> str:
+        """根据 report_type 返回 今日/昨日 标签"""
+        return "今日" if self.report_type == "daily" else "昨日"
+    
     def _normalize_config(self):
         """规范化配置项，处理中英文冒号等"""
         # 处理推送时间中的中英文冒号
@@ -485,6 +490,8 @@ class DailySummaryPlugin(Star):
         # 使用配置的总结口吻
         style_prompt = self.summary_prompt if self.summary_prompt else "你是一个群聊总结助手，请用轻松幽默的口吻总结群聊内容。"
         
+        dl = self._day_label  # 今日/昨日
+        
         prompt = f"""{style_prompt}
 
 以下是群聊记录：
@@ -492,12 +499,12 @@ class DailySummaryPlugin(Star):
 
 请严格按照以下格式输出，不要添加任何多余内容：
 
-【今日话题】
+【{dl}话题】
 一句话描述第一个话题
 一句话描述第二个话题
 一句话描述第三个话题
 
-【今日金句】
+【{dl}金句】
 xxxx说："xxxxxxx"
 xxxx说："xxxxxxx"
 xxxx说："xxxxxxx"
@@ -506,8 +513,8 @@ xxxx说："xxxxxxx"
 50字以内的总结
 
 注意：
-1. 今日话题：直接写话题描述，不要加序号，每行一个话题
-2. 今日金句：提取群聊中最有意思、最精辟、反响最好的话，格式为 昵称说："原话"，最多3条
+1. {dl}话题：直接写话题描述，不要加序号，每行一个话题
+2. {dl}金句：提取群聊中最有意思、最精辟、反响最好的话，格式为 昵称说："原话"，最多3条
 3. 整体总结：50字以内"""
         
         return prompt
@@ -562,7 +569,7 @@ xxxx说："xxxxxxx"
         
         topics = "、".join(found_topics[:3]) if found_topics else "日常交流"
         interesting_points = f"共{total_messages}条消息，群友积极参与讨论"
-        overall_summary = f"今日群聊活跃，共{total_messages}条消息，氛围良好"
+        overall_summary = f"{self._day_label}群聊活跃，共{total_messages}条消息，氛围良好"
         
         return {
             "topics": topics,
@@ -573,14 +580,15 @@ xxxx说："xxxxxxx"
     def _build_report(self, stats: Dict, ai_summary: Dict, group_id: str) -> str:
         """构建最终报告"""
         now = datetime.now()
-        date_str = now.strftime("%Y年%m月%d日")
+        dl = self._day_label  # 今日/昨日
         
         if self.report_type == "daily":
-            title = f"📊 {date_str} 群聊日报"
+            date_str = now.strftime("%Y年%m月%d日")
         else:
             yesterday = now - timedelta(days=1)
             date_str = yesterday.strftime("%Y年%m月%d日")
-            title = f"📊 {date_str} 群聊日报"
+        
+        title = f"📊 {date_str} 群聊{self._day_label}报"
         
         # 构建报告
         report_lines = [
@@ -602,7 +610,7 @@ xxxx说："xxxxxxx"
         
         # 添加AI总结（直接使用AI返回的格式化内容）
         if ai_summary.get("topics"):
-            report_lines.append("💡 今日话题")
+            report_lines.append(f"💡 {dl}话题")
             # 给每行添加🟢前缀
             for line in ai_summary["topics"].split("\n"):
                 line = line.strip()
@@ -613,7 +621,7 @@ xxxx说："xxxxxxx"
             report_lines.append("")
         
         if ai_summary.get("interesting_points"):
-            report_lines.append("💬 今日金句")
+            report_lines.append(f"💬 {dl}金句")
             # 金句格式已经由AI生成，直接输出
             for line in ai_summary["interesting_points"].split("\n"):
                 line = line.strip()
