@@ -33,6 +33,7 @@ class DailySummaryPlugin(Star):
         self.group_ids = config.get("group_ids", [])
         self.max_length = config.get("max_length", 1000)
         self.debug_mode = config.get("debug_mode", False)
+        self.max_messages = config.get("max_messages", 200)
         self.summary_prompt = config.get("summary_prompt", "你是一个群聊总结助手，请用轻松幽默的口吻总结群聊内容。")
         
         # 解析昵称映射（格式：QQ号:昵称，每行一个）
@@ -483,8 +484,8 @@ class DailySummaryPlugin(Star):
     
     def _build_summary_prompt(self, messages: List[str]) -> str:
         """构建AI总结的提示词"""
-        # 取最后100条消息用于总结（避免token过多）
-        recent_messages = messages[-100:] if len(messages) > 100 else messages
+        # 取最近N条消息用于总结
+        recent_messages = messages[-self.max_messages:] if len(messages) > self.max_messages else messages
         messages_text = "\n".join(recent_messages)
         
         # 使用配置的总结口吻
@@ -492,30 +493,32 @@ class DailySummaryPlugin(Star):
         
         dl = self._day_label  # 今日/昨日
         
-        prompt = f"""{style_prompt}
+        prompt = f"""你是群聊总结助手，请用以下口吻总结群聊：{style_prompt}
 
 以下是群聊记录：
 {messages_text}
 
-请严格按照以下格式输出，不要添加任何多余内容：
+请按照以下格式输出总结：
 
 【{dl}话题】
-一句话描述第一个话题
-一句话描述第二个话题
-一句话描述第三个话题
+话题1的一句话描述
+话题2的一句话描述
+...
+（最少1条，最多5条，不写序号）
 
 【{dl}金句】
 xxxx说："xxxxxxx"
-xxxx说："xxxxxxx"
-xxxx说："xxxxxxx"
+（最多3条）
 
 【整体总结】
 50字以内的总结
 
-注意：
-1. {dl}话题：直接写话题描述，不要加序号，每行一个话题
-2. {dl}金句：提取群聊中最有意思、最精辟、反响最好的话，格式为 昵称说："原话"，最多3条
-3. 整体总结：50字以内"""
+话题提炼规则（非常重要）：
+1. 不要孤立看待每条消息，要联系上下文归纳——比如"面具能骗过扫脸识别"只是细节，它属于"高考安检方式讨论"这个大话题
+2. 优先收录讨论消息数多、参与人数多的话题
+3. 如果你发现群聊讨论了超过5个独立话题，请将它们合并归类，一条话题描述可以涵盖多个相关讨论（如"讨论了A、B和C"）
+4. 避免收录只有一两个人草草说了两句就结束的话题
+5. 每条话题描述控制在20字以内"""
         
         return prompt
     

@@ -42,6 +42,12 @@
     "default": 1000,
     "hint": "总结报告的最大字数限制，默认1000字"
   },
+  "max_messages": {
+    "description": "提取消息条数",
+    "type": "int",
+    "default": 200,
+    "hint": "用于生成总结的历史消息条数，默认200条。越多覆盖话题越全，但可能超出大模型上下文限制"
+  },
   "debug_mode": {
     "description": "调试模式",
     "type": "bool",
