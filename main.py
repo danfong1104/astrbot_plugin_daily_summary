@@ -34,6 +34,8 @@ class DailySummaryPlugin(Star):
         self.max_length = config.get("max_length", 1000)
         self.debug_mode = config.get("debug_mode", False)
         self.max_messages = config.get("max_messages", 200)
+        self.topic_max_length = config.get("topic_max_length", 30)
+        self.summary_max_length = config.get("summary_max_length", 80)
         self.summary_prompt = config.get("summary_prompt", "你是一个群聊总结助手，请用轻松幽默的口吻总结群聊内容。")
         
         # 解析昵称映射（格式：QQ号:昵称，每行一个）
@@ -513,14 +515,15 @@ xxxx说："xxxxxxx"
 （最多3条）
 
 【整体总结】
-50字以内的总结
+{self.summary_max_length}字以内的总结
 
 话题提炼规则（非常重要）：
-1. 不要孤立看待每条消息，要联系上下文归纳——比如"面具能骗过扫脸识别"只是细节，它属于"高考安检方式讨论"这个大话题
-2. 优先收录讨论消息数多、参与人数多的话题
-3. 如果你发现群聊讨论了超过5个独立话题，请将它们合并归类，一条话题描述可以涵盖多个相关讨论（如"讨论了A、B和C"）
-4. 避免收录只有一两个人草草说了两句就结束的话题
-5. 每条话题描述控制在20字以内"""
+1. 话题按聊天时间顺序排列，最先讨论的话题排在最前面
+2. 不要孤立看待每条消息，要联系上下文归纳——比如"面具能骗过扫脸识别"只是细节，它属于"高考安检方式讨论"这个大话题
+3. 优先收录讨论消息数多、参与人数多的话题
+4. 如果你发现群聊讨论了超过5个独立话题，请将它们合并归类，一条话题描述可以涵盖多个相关讨论（如"讨论了A、B和C"）
+5. 避免收录只有一两个人草草说了两句就结束的话题
+6. 每条话题描述控制在{self.topic_max_length}字以内"""
         
         return prompt
     

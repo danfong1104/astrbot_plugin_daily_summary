@@ -48,6 +48,18 @@
     "default": 200,
     "hint": "用于生成总结的历史消息条数，默认200条。越多覆盖话题越全，但可能超出大模型上下文限制"
   },
+  "topic_max_length": {
+    "description": "话题描述字数上限",
+    "type": "int",
+    "default": 30,
+    "hint": "每条话题描述的最大字数，默认30字"
+  },
+  "summary_max_length": {
+    "description": "整体总结字数上限",
+    "type": "int",
+    "default": 80,
+    "hint": "整体总结部分的最大字数，默认80字"
+  },
   "debug_mode": {
     "description": "调试模式",
     "type": "bool",
