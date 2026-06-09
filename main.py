@@ -485,7 +485,9 @@ class DailySummaryPlugin(Star):
     def _build_summary_prompt(self, messages: List[str]) -> str:
         """构建AI总结的提示词"""
         # 取最近N条消息用于总结
+        # 注意：API 返回的消息是倒序的（最新在前），需要先反转成正序
         recent_messages = messages[-self.max_messages:] if len(messages) > self.max_messages else messages
+        recent_messages = list(reversed(recent_messages))  # 反转为时间正序：旧→新
         messages_text = "\n".join(recent_messages)
         
         # 使用配置的总结口吻
