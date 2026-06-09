@@ -173,10 +173,14 @@ class DailySummaryPlugin(Star):
             # 构建消息链
             chain = MessageChain().message(message)
             
-            # 获取群聊的统一消息来源
-            # 这里需要根据平台适配器来构建umo
-            # 暂时使用简单的群号作为标识
-            umo = f"aiocqhttp:GroupMessage:{group_id}"
+            # 获取平台适配器实例，拿到真实的 adapter ID
+            platform = self.context.get_platform(filter.PlatformAdapterType.AIOCQHTTP)
+            if not platform:
+                logger.error("aiocqhttp platform not found for sending message")
+                return
+            
+            adapter_id = platform.meta().id
+            umo = f"{adapter_id}:GroupMessage:{group_id}"
             
             await self.context.send_message(umo, chain)
         except Exception as e:
