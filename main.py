@@ -367,6 +367,9 @@ class DailySummaryPlugin(Star):
             if cutoff_timestamp <= msg_time <= end_timestamp:
                 filtered.append(msg)
         
+        # 按时间戳升序排列，确保消息是时间正序（旧→新）
+        filtered.sort(key=lambda m: m.get("timestamp", 0))
+        
         return filtered
     
     def _analyze_messages(self, messages: List[Dict]) -> Dict[str, Any]:
@@ -487,9 +490,9 @@ class DailySummaryPlugin(Star):
     def _build_summary_prompt(self, messages: List[str]) -> str:
         """构建AI总结的提示词"""
         # 取最近N条消息用于总结
-        # 注意：API 返回的消息是倒序的（最新在前），需要先反转成正序
+        # messages 已经在 _filter_messages_by_time 中按时间升序排好（旧→新）
+        # 取最后 max_messages 条，保留最近的消息，顺序仍是旧→新
         recent_messages = messages[-self.max_messages:] if len(messages) > self.max_messages else messages
-        recent_messages = list(reversed(recent_messages))  # 反转为时间正序：旧→新
         messages_text = "\n".join(recent_messages)
         
         # 使用配置的总结口吻
